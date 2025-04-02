@@ -1,15 +1,25 @@
 package org.example;
 
-import com.azure.messaging.servicebus.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+
+import org.eclipse.microprofile.config.inject.ConfigProperty;
+
+import com.azure.messaging.servicebus.ServiceBusClientBuilder;
+import com.azure.messaging.servicebus.ServiceBusMessage;
+import com.azure.messaging.servicebus.ServiceBusReceivedMessage;
+import com.azure.messaging.servicebus.ServiceBusReceiverClient;
+import com.azure.messaging.servicebus.ServiceBusSenderClient;
 import com.azure.messaging.servicebus.models.SubQueue;
 
-import jakarta.ws.rs.*;
+import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
-import org.eclipse.microprofile.config.inject.ConfigProperty;
-import java.time.Instant;
-import java.time.Duration;
-import java.util.List;
 
 @Path("/dlq-replay")
 @Produces(MediaType.APPLICATION_JSON)
@@ -58,6 +68,16 @@ public class DLQReplayerResource {
                 if (enqueuedTime.isAfter(thresholdTime)) {
                     // Create a new message and copy the body
                     ServiceBusMessage retriedMessage = new ServiceBusMessage(message.getBody());
+
+                    // Copy message metadata to ensure correct routing
+                    retriedMessage.setContentType(message.getContentType());
+                    retriedMessage.setSessionId(message.getSessionId());
+                    retriedMessage.setSubject(message.getSubject());
+                    retriedMessage.setMessageId(message.getMessageId());  // Preserve the Message ID
+                    retriedMessage.setCorrelationId(message.getCorrelationId());
+                    
+                    // Copy application properties (if any)
+                    retriedMessage.getApplicationProperties().putAll(message.getApplicationProperties());
 
                     // Add custom application property
                     retriedMessage.getApplicationProperties().put("x-retried-automatically", "true");
